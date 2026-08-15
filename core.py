@@ -1,16 +1,27 @@
 from writer import *
 from storage import storage
+import re
 
 
 def err_len_args(command: bytes) -> bytes:
     return encode_error(b"ERR wrong number of arguments for '" + command.lower() + b"' command")    
 
+def _change_by(key: bytes, step: int) -> bytes:
+    val = storage.get(key)
+    if val is None: 
+        val = b"0"
+    if not re.match(rb"^-?\d+$", val): 
+        return encode_error(b"ERR value is not an integer or out of range")
+    elif not (-(2**63) <= int(val) + step <= 2**63 - 1):
+        return encode_error(b"ERR value is not an integer or out of range")
+    else:
+        new_val = int(val) + step
+    storage[key] = str(new_val).encode()  
+    return encode_integer(new_val) 
+
+
 def dispatch(frame: bytes| list[bytes]) -> bytes:
     if not isinstance(frame, list) or not frame or not all(isinstance(x, bytes) for x in frame):
-        for x in frame:
-            print(type(x))
-            print(x)
-            print("-"*10)
         return encode_error(b"ERR malformed request")
     command = frame[0].upper()
     len_frame = len(frame)
@@ -38,6 +49,22 @@ def dispatch(frame: bytes| list[bytes]) -> bytes:
                     del storage[key]
                     count_del += 1
             return (encode_integer(count_del))
+        case b"INCR":
+            if len_frame != 2: return err_len_args(command)
+            return _change_by(frame[1], 1)
+        case b"DECR":
+            if len_frame != 2: return err_len_args(command)
+            return _change_by(frame[1], -1)
+        case b"INCRBY":
+            if len_frame != 3: return err_len_args(command)
+            elif not re.match(rb"^-?\d+$", frame[2]): 
+                return encode_error(b"ERR value is not an integer or out of range") # редис тоже возращает так
+            return _change_by(frame[1], int(frame[2]))
+        case b"DECRBY":
+            if len_frame != 3: return err_len_args(command)
+            elif not re.match(rb"^-?\d+$", frame[2]): 
+                return encode_error(b"ERR value is not an integer or out of range") 
+            return _change_by(frame[1], -int(frame[2]))
         case b"COMMAND":
             return encode_array([])
         case b"CLIENT":
