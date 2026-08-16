@@ -1,1 +1,130 @@
-storage = {} 
+import time
+import heapq
+from dataclasses import dataclass
+from functools import wraps
+import math
+
+@dataclass
+class Entry:
+    value: bytes
+    expire_at: float | None = None
+
+class Storage:
+    def __init__(self, clock=time.monotonic):
+        self.storage: dict[bytes, Entry]        = {} # {key: (value, expire_at)}
+        self.heap:    list[tuple[float, bytes]] = [] # [(expire_at, key)....]
+
+        self.clock = clock
+
+
+    def _check_ttl(self, key) -> int:
+        """1 - валидно 
+           0 - мертво 
+          -1 - есть, но нет ттл
+          -2 - ключа нет
+        """
+        entry = self.storage.get(key)
+        if entry is None: 
+            return -2
+
+        if entry.expire_at is None:
+            return -1
+
+        return 1 if entry.expire_at > self.clock() else 0
+
+
+    def _purge_if_expired(self, key: bytes) -> int:
+        expired = self._check_ttl(key)
+        if expired == 0:
+            del self.storage[key]
+        return expired
+
+    def _purge_expired(func):
+        @wraps(func)
+        def wrapper(self, key: bytes, *args, **kwargs):
+            self._purge_if_expired(key)
+            return func(self, key, *args, **kwargs)
+
+        return wrapper
+
+
+    @_purge_expired
+    def get(self, key: bytes) -> bytes | None:
+        entry = self.storage.get(key)
+        if entry is None: 
+            return None
+        return entry.value
+    
+    def __getitem__(self, key: bytes) -> bytes | None:
+        return self.get(key)
+
+    def set(self, key: bytes, value: bytes) -> None:
+        self.storage[key] = Entry(value=value)
+
+    def __setitem__(self, key: bytes, value: bytes) -> None:
+        return self.set(key, value)
+
+
+    @_purge_expired
+    def delete(self, key: bytes) -> int:
+        if key in self.storage:
+            del self.storage[key]
+            return 1
+        return 0
+
+    def __delitem__(self, key: bytes) -> None:
+        self.delete(key)
+
+
+    @_purge_expired
+    def update(self, key: bytes, value: bytes) -> None:
+        entry = self.storage.get(key)
+        if entry is None:
+            self.storage[key] = Entry(value)  
+        else:
+            entry.value = value  
+
+        
+    @_purge_expired
+    def expire(self, key: bytes, sec: float) -> bool:
+        entry = self.storage.get(key)
+        if entry is None:
+            return False
+        entry.expire_at = sec + self.clock()
+        heapq.heappush(self.heap, (entry.expire_at, key))
+        return True
+
+
+    @_purge_expired
+    def ttl(self, key: bytes) -> int:
+        entry = self.storage.get(key)
+        if entry is None:
+            return -2
+        if entry.expire_at is None:
+            return -1
+        return math.ceil(entry.expire_at - self.clock())
+
+        
+    def next_deadline(self) -> float | None:
+        while self.heap:
+            expire_at, key = self.heap[0]
+            entry = self.storage.get(key)    
+            if entry is None or expire_at != entry.expire_at:
+                heapq.heappop(self.heap)                  # мусорный будильник
+                continue
+            return expire_at
+        return None
+            
+
+    def collect_expired(self) -> None:
+        now = self.clock()
+        while self.heap and self.heap[0][0] <= now:
+            expire_at, key = heapq.heappop(self.heap) 
+            entry = self.storage.get(key)    
+            if entry is not None and entry.expire_at is not None and entry.expire_at <= now:
+                del self.storage[key]
+            
+
+    
+storage = Storage()
+
