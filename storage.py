@@ -32,8 +32,12 @@ class Storage:
 
         return 1 if entry.expire_at > self.clock() else 0
 
+    #########################
+    # Вспомогательные функции
+    #########################
 
     def _purge_if_expired(self, key: bytes) -> int:
+        """Удаляет ключ если у него просрочен ttl"""
         expired = self._check_ttl(key)
         if expired == 0:
             del self.storage[key]
@@ -46,6 +50,15 @@ class Storage:
             return func(self, key, *args, **kwargs)
 
         return wrapper
+
+
+    @_purge_expired
+    def __contains__(self, key: bytes) -> bool:
+        return key in self.storage
+
+    ##################
+    # Основные функции
+    ##################
 
 
     @_purge_expired

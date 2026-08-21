@@ -1,9 +1,11 @@
 import socket, selectors
+import time
+
 from reader import Reader
 from errors import ConnectionClosed, ProtocolError, NeedMoreData
 from writer import *
 from connection import Connection
-
+from storage import storage
             
 def main(port: int = 9000):
     sel = selectors.DefaultSelector()
@@ -15,7 +17,9 @@ def main(port: int = 9000):
     srv.setblocking(False)
     sel.register(srv, selectors.EVENT_READ)
     while True:
-        for key, events in sel.select():        # единственное место ожидания
+        nd = storage.next_deadline()
+        timeout = None if nd is None else max(0.0, nd - time.monotonic())
+        for key, events in sel.select(timeout):        # единственное место ожидания
             sock = key.fileobj
             if sock is srv:                      # готов слушающий = accept не заблокирует
                 client_sock, addr = srv.accept()
@@ -27,6 +31,7 @@ def main(port: int = 9000):
                     conn.on_readable()
                 if events & selectors.EVENT_WRITE and not conn.closed:
                     conn.on_writable()
+        storage.collect_expired() 
 
 
 if __name__ == "__main__":
