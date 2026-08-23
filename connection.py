@@ -4,6 +4,11 @@ from reader import Reader
 from writer import *
 from errors import NeedMoreData, ConnectionClosed, ProtocolError
 from core import dispatch
+import logging
+
+
+
+log = logging.getLogger(__name__)
 
 
 class Connection:
@@ -41,7 +46,13 @@ class Connection:
             except ProtocolError:
                 self.close()
                 return
-            self.out_buf += dispatch(frame)
+
+            try:
+                response = dispatch(frame)
+            except Exception:
+                log.exception("handler crashed on frame %r", frame)
+                response = encode_error(b"ERR internal error")
+            self.out_buf += response
             
         if self.out_buf and not self.closed:
             self.sel.modify(

@@ -3,10 +3,11 @@ import heapq
 from dataclasses import dataclass
 from functools import wraps
 import math
+from errors import WrongType
 
 @dataclass
 class Entry:
-    value: bytes
+    value: bytes | list[bytes]
     expire_at: float | None = None
 
 class Storage:
@@ -64,18 +65,121 @@ class Storage:
     @_purge_expired
     def get(self, key: bytes) -> bytes | None:
         entry = self.storage.get(key)
-        if entry is None: 
+
+        if entry is None:
             return None
+        elif isinstance(entry.value, list):
+            raise WrongType
         return entry.value
+
     
     def __getitem__(self, key: bytes) -> bytes | None:
         return self.get(key)
 
+
     def set(self, key: bytes, value: bytes) -> None:
         self.storage[key] = Entry(value=value)
 
+
     def __setitem__(self, key: bytes, value: bytes) -> None:
         return self.set(key, value)
+
+
+    @_purge_expired
+    def lpush(self, key: bytes, *values: bytes) -> int:
+        if not values:
+            raise ValueError("LPUSH requires at least one value")
+
+        entry = self.storage.get(key)
+        if entry is None:
+            entry = Entry([])
+            self.storage[key] = entry 
+        elif not isinstance(entry.value, list):
+            raise WrongType
+        for value in values:
+            entry.value.insert(0, value)
+
+        return len(entry.value)
+
+
+    @_purge_expired
+    def rpush(self, key: bytes, *values: bytes) -> int:
+        if not values:
+            raise ValueError("RPUSH requires at least one value")
+        
+        entry = self.storage.get(key)
+        if entry is None:
+            entry = Entry([])
+            self.storage[key] = entry 
+        elif not isinstance(entry.value, list):
+            raise WrongType
+        for value in values:
+            entry.value.append(value)
+
+        return len(entry.value)
+
+
+    @_purge_expired
+    def lpop(self, key) -> bytes | None:
+
+        entry = self.storage.get(key)
+        if entry is None:
+            return None
+        elif not isinstance(entry.value, list):
+            raise WrongType
+
+        value = entry.value.pop(0)
+        if len(entry.value) == 0:
+            del self.storage[key]
+
+        return value
+
+
+    @_purge_expired
+    def rpop(self, key) -> bytes | None:
+
+        entry = self.storage.get(key)
+        if entry is None:
+            return None
+        elif not isinstance(entry.value, list):
+            raise WrongType
+        value = entry.value.pop()
+        if len(entry.value) == 0:
+            del self.storage[key]
+
+        return value
+
+
+    @_purge_expired
+    def llen(self, key) -> int:
+        entry = self.storage.get(key)
+        if entry is None:
+            return 0
+        elif not isinstance(entry.value, list):
+            print(type(entry.value))
+            print(type(entry.value.value))
+            print(entry.value)
+            print(entry.value.value)
+            time.sleep(20)
+            raise WrongType
+        return len(entry.value)
+
+    @_purge_expired
+    def lrange(self, key, start, stop) -> list[bytes]:
+        entry = self.storage.get(key)
+        if entry is None:
+            return []
+        elif not isinstance(entry.value, list):
+            raise WrongType
+
+        increase = len(entry.value) + 1 if stop < 0 else 1
+        stop += increase
+
+        if stop < 0:
+            return []
+
+        return entry.value[start:stop]
+
 
 
     @_purge_expired

@@ -1,6 +1,8 @@
 from writer import *
 from storage import storage
+from errors import WrongType
 import re
+
 
 INT_RE = re.compile(rb"^-?\d+$")
 
@@ -26,99 +28,160 @@ def dispatch(frame: bytes| list[bytes]) -> bytes:
         return encode_error(b"ERR malformed request")
     command = frame[0].upper()
     len_frame = len(frame)
-    match command:
-        case b"PING":
-            return encode_simple_string(b"PONG")
+    try:
+        match command:
+            case b"PING":
+                return encode_simple_string(b"PONG")
 
 
-        case b"ECHO":
-            if len_frame != 2:
-                return err_len_args(command)
+            case b"ECHO":
+                if len_frame != 2:
+                    return err_len_args(command)
 
-            return encode_bulk_string(frame[1])
-
-
-        case b"SET":
-            if len_frame != 3:
-                return err_len_args(command)
-
-            storage[frame[1]] = frame[2]
-            return encode_simple_string(b"OK")
-
-        case b"GET":
-            if len_frame != 2:
-                return err_len_args(command)
-
-            val = storage.get(frame[1])
-            if val is None: 
-                return encode_null()
-
-            return encode_bulk_string(val)
+                return encode_bulk_string(frame[1])
 
 
-        case b"DEL":
-            if len_frame == 1:
-                return err_len_args(command)
+            case b"SET":
+                if len_frame != 3:
+                    return err_len_args(command)
 
-            count_del = 0
-            for key in frame[1:]: 
-                count_del += storage.delete(key)
-
-            return (encode_integer(count_del))
-
-        case b"EXPIRE":
-            if len_frame != 3:
-                return err_len_args(command)
-            elif not INT_RE.match(frame[2]): 
-                return encode_error(b"ERR value is not an integer or out of range") 
-
-            ok = storage.expire(frame[1], int(frame[2]))
-            return encode_integer(1 if ok else 0)
+                storage[frame[1]] = frame[2]
+                return encode_simple_string(b"OK")
 
 
-        case b"INCR":
-            if len_frame != 2:
-                return err_len_args(command)
+            case b"GET":
+                if len_frame != 2:
+                    return err_len_args(command)
 
-            return _change_by(frame[1], 1)
+                val = storage.get(frame[1])
+                if val is None: 
+                    return encode_null()
 
-
-        case b"DECR":
-            if len_frame != 2:
-                return err_len_args(command)
-
-            return _change_by(frame[1], -1)
+                return encode_bulk_string(val)
 
 
-        case b"INCRBY":
-            if len_frame != 3:
-                return err_len_args(command)
-            elif not INT_RE.match(frame[2]): 
-                return encode_error(b"ERR value is not an integer or out of range") # редис тоже возращает так
+            case b"DEL":
+                if len_frame == 1:
+                    return err_len_args(command)
 
-            return _change_by(frame[1], int(frame[2]))
+                count_del = 0
+                for key in frame[1:]: 
+                    count_del += storage.delete(key)
 
-
-        case b"DECRBY":
-            if len_frame != 3:
-                return err_len_args(command)
-            elif not INT_RE.match(frame[2]): 
-                return encode_error(b"ERR value is not an integer or out of range") 
-
-            return _change_by(frame[1], -int(frame[2]))
-
-        case b"TTL":                      
-            if len_frame != 2: return err_len_args(command)
-            return encode_integer(storage.ttl(frame[1])) 
+                return (encode_integer(count_del))
 
 
-        case b"COMMAND":
-            return encode_array([])
+            case b"LPUSH":
+                if len_frame < 3:
+                    return err_len_args(command)
+                return (encode_integer(storage.lpush(frame[1], *frame[2:])))
 
 
-        case b"CLIENT":
-            return encode_simple_string(b"OK")
+
+            case b"RPUSH":
+                if len_frame < 3:
+                    return err_len_args(command)
+                return (encode_integer(storage.rpush(frame[1], *frame[2:])))
 
 
-        case _:
-            return encode_error(b"ERR unknown command '" + command + b"'")
+            case b"LPOP":
+                if len_frame != 2:
+                    return err_len_args(command)
+
+                value = storage.lpop(frame[1])
+
+                if value is None:
+                    return encode_null()
+
+                return encode_bulk_string(value)
+
+
+            case b"RPOP":
+                if len_frame != 2:
+                    return err_len_args(command)
+
+                value = storage.rpop(frame[1])
+
+                if value is None:
+                    return encode_null()
+
+                return encode_bulk_string(value)
+
+
+            case b"LLEN":
+                if len_frame != 2:
+                    return err_len_args(command)
+                return (encode_integer(storage.llen(frame[1])))
+
+
+            case b"LRANGE":
+                if len_frame != 4:
+                    return err_len_args(command)
+
+                key, start, stop = frame[1:]
+
+                if not INT_RE.match(start) or not INT_RE.match(stop): 
+                    return encode_error(b"ERR value is not an integer or out of range") 
+
+                return encode_array(storage.lrange(key, int(start), int(stop)))
+
+
+            case b"EXPIRE":
+                if len_frame != 3:
+                    return err_len_args(command)
+                elif not INT_RE.match(frame[2]): 
+                    return encode_error(b"ERR value is not an integer or out of range") 
+
+                ok = storage.expire(frame[1], int(frame[2]))
+                return encode_integer(1 if ok else 0)
+
+
+            case b"INCR":
+                if len_frame != 2:
+                    return err_len_args(command)
+
+                return _change_by(frame[1], 1)
+
+
+            case b"DECR":
+                if len_frame != 2:
+                    return err_len_args(command)
+
+                return _change_by(frame[1], -1)
+
+
+            case b"INCRBY":
+                if len_frame != 3:
+                    return err_len_args(command)
+                elif not INT_RE.match(frame[2]): 
+                    return encode_error(b"ERR value is not an integer or out of range") # редис тоже возращает так
+
+                return _change_by(frame[1], int(frame[2]))
+
+
+            case b"DECRBY":
+                if len_frame != 3:
+                    return err_len_args(command)
+                elif not INT_RE.match(frame[2]): 
+                    return encode_error(b"ERR value is not an integer or out of range") 
+
+                return _change_by(frame[1], -int(frame[2]))
+
+
+            case b"TTL":                      
+                if len_frame != 2: return err_len_args(command)
+                return encode_integer(storage.ttl(frame[1])) 
+
+
+            case b"COMMAND":
+                return encode_array([])
+
+
+            case b"CLIENT":
+                return encode_simple_string(b"OK")
+
+
+            case _:
+                return encode_error(b"ERR unknown command '" + command + b"'")
+    except WrongType:
+        return encode_error(b"WRONGTYPE Operation against a key holding the wrong kind of value")

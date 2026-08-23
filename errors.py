@@ -14,3 +14,6 @@ class ConnectionClosed(Exception):
 
 class NeedMoreData(Exception):
     """Нехватка данных в буфере"""
+
+class WrongType(Exception):
+    """Операция над неправильным типом данных"""

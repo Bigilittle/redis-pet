@@ -32,6 +32,7 @@ def main(port: int = 9000):
                 if events & selectors.EVENT_WRITE and not conn.closed:
                     conn.on_writable()
         storage.collect_expired() 
+        print(storage.storage)
 
 
 if __name__ == "__main__":
