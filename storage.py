@@ -156,11 +156,6 @@ class Storage:
         if entry is None:
             return 0
         elif not isinstance(entry.value, list):
-            print(type(entry.value))
-            print(type(entry.value.value))
-            print(entry.value)
-            print(entry.value.value)
-            time.sleep(20)
             raise WrongType
         return len(entry.value)
 

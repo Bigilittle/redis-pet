@@ -3,7 +3,8 @@ from selectors import EVENT_READ, EVENT_WRITE
 from reader import Reader
 from writer import *
 from errors import NeedMoreData, ConnectionClosed, ProtocolError
-from core import dispatch
+from commands.registry import dispatch
+from storage import storage
 import logging
 
 
@@ -48,7 +49,7 @@ class Connection:
                 return
 
             try:
-                response = dispatch(frame)
+                response = dispatch(frame, storage)
             except Exception:
                 log.exception("handler crashed on frame %r", frame)
                 response = encode_error(b"ERR internal error")
@@ -63,7 +64,7 @@ class Connection:
 
     def on_writable(self):
         try:
-            n = self.socet.send(self.out_buf)      # send, не sendall: вернёт сколько принял
+            n = self.socet.send(self.out_buf)     
         except ConnectionError: 
             self.close()
             return
