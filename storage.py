@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from functools import wraps
 import math
 from errors import WrongType
+import os
+import time
+
+from writer import encode_array
 
 @dataclass
 class Entry:
@@ -16,6 +20,55 @@ class Storage:
         self.heap:    list[tuple[float, bytes]] = [] # [(expire_at, key)....]
 
         self.clock = clock
+
+
+
+    def save(self, path):
+        now_mono = self.clock()
+        now_wall = time.time()
+
+        entries = []
+
+        for key, entry in self.storage.items():
+
+            if isinstance(entry.value, list):
+                type_value = b"list"
+            else:
+                type_value = b"str"
+
+            expire_at = None
+
+            if entry.expire_at is not None:
+                remaining = entry.expire_at - now_mono
+    
+                if remaining <= 0:
+                    continue
+
+                expire_at = round(
+                    (now_wall + remaining)
+                )
+
+            data = [
+                type_value,
+                key,
+                entry.value,
+                expire_at,
+            ]
+
+            entries.append(data)
+
+        dump = encode_array(entries)
+
+        with open(path, "wb") as rdb:
+            rdb.write(dump)
+
+                
+
+                
+
+
+
+
 
 
     def _check_ttl(self, key) -> int:

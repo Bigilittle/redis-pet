@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from errors import ProtocolError, RespError
 
 def encode_simple_string(s: bytes) -> bytes:
@@ -26,7 +28,7 @@ def encode_null():
 
 
 RespValue = bytes | int | None | list["RespValue"] | RespError
-def encode_array(arr: list[RespValue]) -> bytes:
+def encode_array(arr: Sequence[RespValue]) -> bytes:
     parts = [
         b"*",
         str(len(arr)).encode(),
@@ -47,7 +49,7 @@ def encode_array(arr: list[RespValue]) -> bytes:
                 parts.append(encode_array(value))
 
             case RespError(message=msg):
-                parts.append(encode_error(value))
+                parts.append(encode_error(msg))
 
             case _:
                 raise TypeError(f"cannot encode {type(value).__name__} in array")

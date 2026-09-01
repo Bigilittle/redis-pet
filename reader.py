@@ -1,11 +1,6 @@
 import socket
-from dataclasses import dataclass
-from errors import ProtocolError, ConnectionClosed, NeedMoreData
+from errors import ProtocolError, ConnectionClosed, NeedMoreData, RespError
 
-
-@dataclass
-class RespError:
-    message: bytes
 
 class Reader:
     MAX_LINE = 64 * 1024  # предохранитель: заголовок длиннее — мусор или злодей
