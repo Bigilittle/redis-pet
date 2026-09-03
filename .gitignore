@@ -1,3 +1,4 @@
 sand/
 __pycache__/
 .coverage
+redis/

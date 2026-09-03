@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from functools import wraps
 import math
 from errors import WrongType
+from typing import Union
 import os
-import time
 
 from writer import encode_array
 
@@ -23,7 +23,12 @@ class Storage:
 
 
 
-    def save(self, path):
+    def dump(self) -> tuple[int, bytes | Exception]:
+        """
+        1 - успех
+        0 - успешное сохранение
+        """
+        
         now_mono = self.clock()
         now_wall = time.time()
 
@@ -37,15 +42,12 @@ class Storage:
                 type_value = b"str"
 
             expire_at = None
-
             if entry.expire_at is not None:
                 remaining = entry.expire_at - now_mono
-    
                 if remaining <= 0:
                     continue
-
                 expire_at = round(
-                    (now_wall + remaining)
+                    (now_wall + remaining) * 1000
                 )
 
             data = [
@@ -57,10 +59,33 @@ class Storage:
 
             entries.append(data)
 
-        dump = encode_array(entries)
+        dump = b"".join(
+            encode_array(entry)
+            for entry in entries
+        )
 
-        with open(path, "wb") as rdb:
-            rdb.write(dump)
+        return dump
+
+
+    def _restore(self, key, value, wall_deadline_ms) -> None:
+        mono_deadline = None
+
+        if wall_deadline_ms is not None:
+            remaining = wall_deadline_ms / 1000 - time.time()
+
+            if remaining <= 0:
+                return
+
+            mono_deadline = self.clock() + remaining
+
+        self.storage[key] = Entry(value, mono_deadline)
+
+        if mono_deadline is not None:
+            heapq.heappush(self.heap, (mono_deadline, key))
+
+    
+
+
 
                 
 
@@ -291,5 +316,3 @@ class Storage:
             
 
     
-storage = Storage()
-

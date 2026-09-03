@@ -1,4 +1,7 @@
 from .registry import command
+from storage import Storage
+from snapshots import save
+from config import DBFILE
 from writer import (
     encode_simple_string,
     encode_array,
@@ -22,4 +25,10 @@ def command_(*args: bytes) -> bytes:
      
 @command("CLIENT", -2)
 def client(*args: bytes) -> bytes:
+    return encode_simple_string(b"OK")
+
+
+@command("SAVE", 1)
+def _save(store: Storage):
+    save(store, DBFILE)
     return encode_simple_string(b"OK")
