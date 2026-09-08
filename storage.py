@@ -3,7 +3,7 @@ import heapq
 from dataclasses import dataclass
 from functools import wraps
 import math
-from errors import WrongType
+from errors import WrongType, NotInteger
 from typing import Union
 import os
 
@@ -19,6 +19,7 @@ class Storage:
         self.storage: dict[bytes, Entry]        = {} # {key: (value, expire_at)}
         self.heap:    list[tuple[float, bytes]] = [] # [(expire_at, key)....]
 
+        self.dirty: int = 0
         self.clock = clock
 
 
@@ -83,18 +84,6 @@ class Storage:
         if mono_deadline is not None:
             heapq.heappush(self.heap, (mono_deadline, key))
 
-    
-
-
-
-                
-
-                
-
-
-
-
-
 
     def _check_ttl(self, key) -> int:
         """1 - валидно 
@@ -157,6 +146,7 @@ class Storage:
 
     def set(self, key: bytes, value: bytes) -> None:
         self.storage[key] = Entry(value=value)
+        self.dirty += 1
 
 
     def __setitem__(self, key: bytes, value: bytes) -> None:
@@ -177,6 +167,7 @@ class Storage:
         for value in values:
             entry.value.insert(0, value)
 
+        self.dirty += len(values)
         return len(entry.value)
 
 
@@ -194,6 +185,7 @@ class Storage:
         for value in values:
             entry.value.append(value)
 
+        self.dirty += len(values)
         return len(entry.value)
 
 
@@ -210,6 +202,7 @@ class Storage:
         if len(entry.value) == 0:
             del self.storage[key]
 
+        self.dirty += 1
         return value
 
 
@@ -225,6 +218,7 @@ class Storage:
         if len(entry.value) == 0:
             del self.storage[key]
 
+        self.dirty += 1
         return value
 
 
@@ -259,6 +253,7 @@ class Storage:
     def delete(self, key: bytes) -> int:
         if key in self.storage:
             del self.storage[key]
+            self.dirty += 1
             return 1
         return 0
 
@@ -273,6 +268,7 @@ class Storage:
             self.storage[key] = Entry(value)  
         else:
             entry.value = value  
+        self.dirty += 1
 
         
     @_purge_expired
@@ -280,8 +276,11 @@ class Storage:
         entry = self.storage.get(key)
         if entry is None:
             return False
+        if sec > 2**63 - 1:
+            raise NotInteger
         entry.expire_at = sec + self.clock()
         heapq.heappush(self.heap, (entry.expire_at, key))
+        self.dirty += 1
         return True
 
 

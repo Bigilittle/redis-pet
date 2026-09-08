@@ -26,6 +26,9 @@ class WrongType(RedisError):
 class NotInteger(RedisError):
     msg = b"ERR value is not an integer or out of range"
 
+class SaveDB(RedisError):
+    msg = b"ERR saving the database"
+
 class WrongArity(RedisError):
     def __init__(self, cmd: bytes):
         super().__init__(

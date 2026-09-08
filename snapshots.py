@@ -13,6 +13,7 @@ def save(store: Storage, path: str) -> None:
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, path)
+    store.dirty = 0
 
 def load(path: str, clock=time.monotonic) -> Storage:
     store = Storage(clock=clock)

@@ -6,7 +6,9 @@ from writer import (
     encode_simple_string,
     encode_array,
     encode_bulk_string,
+    encode_error
 )
+from errors import SaveDB
 
 @command("PING", 1)
 def ping() -> bytes:
@@ -30,5 +32,8 @@ def client(*args: bytes) -> bytes:
 
 @command("SAVE", 1)
 def _save(store: Storage):
-    save(store, DBFILE)
-    return encode_simple_string(b"OK")
+    try:
+        save(store, DBFILE)
+        return encode_simple_string(b"OK")
+    except Exception as exp:
+        raise SaveDB
